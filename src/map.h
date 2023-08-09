@@ -1749,6 +1749,7 @@ class map
          * Returns whether the tile at `p` is transparent(you can look past it).
          */
         bool is_transparent( const tripoint &p ) const;
+        bool is_transparent_wo_fields( const tripoint &p ) const;
         // End of light/transparency
 
         /**

@@ -352,4 +352,10 @@ inline const std::array<tripoint, 8> eight_horizontal_neighbors = { {
     }
 };
 
+inline const std::array<tripoint, 3> three_vertical_directions{{
+        {tripoint_above},
+        {tripoint_zero},
+        {tripoint_below}
+    }};
+
 #endif // CATA_SRC_POINT_H
