@@ -126,31 +126,36 @@ struct span {
 };
 
 template<typename UnaryPredicate, typename UnaryVisitor>
-void flood_fill_visit_10_connected( const tripoint &starting_point, UnaryPredicate predicate,
+void flood_fill_visit_10_connected( const tripoint_bub_ms &starting_point, UnaryPredicate predicate,
                                     UnaryVisitor visitor )
 {
-    std::unordered_set<tripoint> visited;
-    std::unordered_set<tripoint> visited_vertically;
-    //std::array<std::bitset, OVERMAP_LAYERS> visited;
+    std::array<std::array<std::bitset<MAPSIZE_Y>, MAPSIZE_X>, OVERMAP_LAYERS> visited;
+    std::array<std::array<std::bitset<MAPSIZE_Y>, MAPSIZE_X>, OVERMAP_LAYERS> visited_vertically;
     std::array<std::vector<span>, OVERMAP_LAYERS> spans_to_process;
-    int current_z = starting_point.z;
-    spans_to_process[current_z + OVERMAP_DEPTH].emplace_back( starting_point.x, starting_point.x,
-            starting_point.y, 1,
-            starting_point.z, 0 );
-    spans_to_process[current_z + OVERMAP_DEPTH].emplace_back( starting_point.x, starting_point.x,
-            starting_point.y - 1,
-            -1, starting_point.z, 0 );
+    int current_z = starting_point.z();
+    spans_to_process[current_z + OVERMAP_DEPTH].emplace_back( starting_point.x(), starting_point.x(),
+            starting_point.y(), 1,
+            starting_point.z(), 0 );
+    spans_to_process[current_z + OVERMAP_DEPTH].emplace_back( starting_point.x(), starting_point.x(),
+            starting_point.y() - 1,
+            -1, starting_point.z(), 0 );
     static int check_count = 0;
     check_count = 0;
     static int visit_count = 0;
     visit_count = 0;
-    auto check = [&predicate, &visited]( const tripoint loc, int dir ) {
+    auto check = [&predicate, &visited]( const tripoint_bub_ms loc, int dir ) {
         check_count++;
-        return visited.find( loc ) == visited.end() && predicate( loc, dir );
+        return loc.z() >= -OVERMAP_DEPTH && loc.z() <= OVERMAP_HEIGHT &&
+               loc.y() >= 0 && loc.y() < MAPSIZE_Y &&
+               loc.x() >= 0 && loc.x() < MAPSIZE_X &&
+               !visited[loc.z() + OVERMAP_DEPTH][loc.y()][loc.x()] && predicate( loc, dir );
     };
-    auto check_vertical = [&predicate, &visited_vertically]( const tripoint loc, int dir ) {
+    auto check_vertical = [&predicate, &visited_vertically]( const tripoint_bub_ms loc, int dir ) {
         check_count++;
-        return visited_vertically.find( loc ) == visited_vertically.end() && predicate( loc, dir );
+        return loc.z() >= -OVERMAP_DEPTH && loc.z() <= OVERMAP_HEIGHT &&
+               loc.y() >= 0 && loc.y() < MAPSIZE_Y &&
+               loc.x() >= 0 && loc.x() < MAPSIZE_X &&
+               !visited_vertically[loc.z() + OVERMAP_DEPTH][loc.y()][loc.x()] && predicate( loc, dir );
     };
     while( true ) {
         struct span current_span;
@@ -169,7 +174,7 @@ void flood_fill_visit_10_connected( const tripoint &starting_point, UnaryPredica
                 break;
             }
         }
-        tripoint current_point{ current_span.startX, current_span.y, current_span.z };
+        tripoint_bub_ms current_point{ static_cast<int>( current_span.startX ), static_cast <int>( current_span.y ), static_cast<int>( current_span.z ) };
         // Special handling for spans with a vertical offset.
         if( current_span.dz != 0 ) {
             bool span_found = 0;
@@ -177,21 +182,21 @@ void flood_fill_visit_10_connected( const tripoint &starting_point, UnaryPredica
                 current_span.startX, current_span.endX, current_span.y, current_span.dy, current_span.z, 0
             };
             // Iterate over tiles in the span, adding to new span as long as check passes.
-            while( current_point.x <= current_span.endX ) {
+            while( current_point.x() <= current_span.endX ) {
                 if( check_vertical( current_point, current_span.dz ) ) {
                     span_found = true;
-                    new_span.endX = current_point.x;
-                    visited_vertically.insert( current_point );
+                    new_span.endX = current_point.x();
+                    visited_vertically[current_point.z() + OVERMAP_DEPTH][current_point.y()].set( current_point.x() );
                 } else {
                     if( span_found ) {
                         spans_to_process[current_z + OVERMAP_DEPTH].emplace_back( new_span.startX, new_span.endX,
-                                new_span.y, 1, current_point.z, 0 );
+                                new_span.y, 1, current_point.z(), 0 );
                         spans_to_process[current_z + OVERMAP_DEPTH].emplace_back( new_span.startX, new_span.endX,
-                                new_span.y - 1, -1, current_point.z, 0 );
+                                new_span.y - 1, -1, current_point.z(), 0 );
                     }
                     span_found = false;
                 }
-                current_point.x++;
+                current_point.x()++;
             }
             continue;
         }
@@ -199,57 +204,58 @@ void flood_fill_visit_10_connected( const tripoint &starting_point, UnaryPredica
         // Scan to the left of the leftmost point in the current span.
         if( check( current_point, 0 ) ) {
             // This decrements before visiting because the next loop will visit the current value of startX
-            current_point.x--;
+            current_point.x()--;
             while( check( current_point, 0 ) ) {
                 visit_count++;
                 visitor( current_point );
-                visited.insert( current_point );
-                current_point.x--;
+                visited[current_point.z() + OVERMAP_DEPTH][current_point.y()].set( current_point.x() );
+                current_point.x()--;
             }
-            current_point.x++;
+            current_point.x()++;
             // If we found visitable tiles to the left of the span, emit a new span going in the other y direction to go around corners.
-            if( current_point.x < current_span.startX ) {
-                spans_to_process[current_z + OVERMAP_DEPTH].emplace_back( current_point.x - 1,
-                        current_span.startX - 1, current_span.y - current_span.dy, -current_span.dy, current_point.z, 0 );
+            if( current_point.x() < current_span.startX ) {
+                spans_to_process[current_z + OVERMAP_DEPTH].emplace_back( current_point.x() - 1,
+                        current_span.startX - 1, current_span.y - current_span.dy, -current_span.dy, current_point.z(),
+                        0 );
             }
         }
-        int furthestX = current_point.x;
-        current_point.x = current_span.startX;
+        int furthestX = current_point.x();
+        current_point.x() = current_span.startX;
         // Scan the span itself, running off the edge to the right if possible.
-        while( current_point.x <= current_span.endX ) {
+        while( current_point.x() <= current_span.endX ) {
             while( check( current_point, 0 ) ) {
                 visit_count++;
                 visitor( current_point );
-                visited.insert( current_point );
-                current_point.x++;
+                visited[current_point.z() + OVERMAP_DEPTH][current_point.y()].set( current_point.x() );
+                current_point.x()++;
             }
             // If we have made any progress in the above loops, emit a span going in our initial y direction as well as in both vertical directions.
-            if( current_point.x > furthestX ) {
-                spans_to_process[current_z + OVERMAP_DEPTH].emplace_back( furthestX - 1, current_point.x,
+            if( current_point.x() > furthestX ) {
+                spans_to_process[current_z + OVERMAP_DEPTH].emplace_back( furthestX - 1, current_point.x(),
                         current_span.y + current_span.dy, current_span.dy,
                         current_span.z, 0 );
                 if( current_z + 1 < OVERMAP_LAYERS ) {
-                    spans_to_process[current_z + OVERMAP_DEPTH + 1].emplace_back( furthestX, current_point.x - 1,
+                    spans_to_process[current_z + OVERMAP_DEPTH + 1].emplace_back( furthestX, current_point.x() - 1,
                             current_span.y, 0, current_span.z + 1, 1 );
                 }
                 if( current_z - 1 >= 0 ) {
-                    spans_to_process[current_z + OVERMAP_DEPTH - 1].emplace_back( furthestX, current_point.x - 1,
+                    spans_to_process[current_z + OVERMAP_DEPTH - 1].emplace_back( furthestX, current_point.x() - 1,
                             current_span.y, 0, current_span.z - 1, -1 );
                 }
             }
             // If we found visitable tiles to the right of the span, emit a new span going in the other y direction to go around corners.
-            if( current_point.x - 1 > current_span.endX ) {
-                spans_to_process[current_z + OVERMAP_DEPTH].emplace_back( current_span.endX + 1, current_point.x,
+            if( current_point.x() - 1 > current_span.endX ) {
+                spans_to_process[current_z + OVERMAP_DEPTH].emplace_back( current_span.endX + 1, current_point.x(),
                         current_span.y - current_span.dy, -current_span.dy, current_span.z, 0 );
             }
             // This is pointing to a tile that faied the predicate, so advance to the next tile.
-            current_point.x++;
+            current_point.x()++;
             // Scan past any unvisitable tiles up to the end of the current span.
-            while( current_point.x < current_span.endX && !predicate( current_point, 0 ) ) {
-                current_point.x++;
+            while( current_point.x() < current_span.endX && !predicate( current_point, 0 ) ) {
+                current_point.x()++;
             }
             // We either found a new visitable tile or ran off the end of the span, record our new scan start point regardless.
-            furthestX = current_point.x;
+            furthestX = current_point.x();
         }
     }
 }

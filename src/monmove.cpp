@@ -492,10 +492,11 @@ static void flood_fill_zone( Creature &origin )
     map &here = get_map();
     creature_tracker &tracker = get_creature_tracker();
 
-    ff::flood_fill_visit_10_connected( origin.pos(),
-    [&here]( const tripoint & loc, int direction ) {
+    ff::flood_fill_visit_10_connected( origin.pos_bub(),
+    [&here]( const tripoint_bub_ms & loc, int direction ) {
         if( direction == 0 ) {
-            return here.inbounds( loc ) && ( here.is_transparent_wo_fields( loc ) || here.passable( loc ) );
+            return here.inbounds( loc ) && ( here.is_transparent_wo_fields( loc.raw() ) ||
+                                             here.passable( loc ) );
         }
         if( direction == 1 ) {
             const maptile &up = here.maptile_at( loc );
@@ -504,7 +505,7 @@ static void flood_fill_zone( Creature &origin )
                 return false;
             }
             if( ( ( up_ter.movecost != 0 && up.get_furn_t().movecost >= 0 ) ||
-                  here.is_transparent_wo_fields( loc ) ) &&
+                  here.is_transparent_wo_fields( loc.raw() ) ) &&
                 ( up_ter.has_flag( ter_furn_flag::TFLAG_NO_FLOOR ) ||
                   up_ter.has_flag( ter_furn_flag::TFLAG_GOES_DOWN ) ) ) {
                 return true;
@@ -522,7 +523,7 @@ static void flood_fill_zone( Creature &origin )
                 return false;
             }
             if( ( ( down_ter.movecost != 0 && down.get_furn_t().movecost >= 0 ) ||
-                  here.is_transparent_wo_fields( loc ) ) &&
+                  here.is_transparent_wo_fields( loc.raw() ) ) &&
                 ( up_ter.has_flag( ter_furn_flag::TFLAG_NO_FLOOR ) ||
                   up_ter.has_flag( ter_furn_flag::TFLAG_GOES_DOWN ) ) ) {
                 return true;
@@ -530,7 +531,7 @@ static void flood_fill_zone( Creature &origin )
         }
         return false;
     },
-    [&tracker, zone_tick]( const tripoint & loc ) {
+    [&tracker, zone_tick]( const tripoint_bub_ms & loc ) {
         Creature *creature = tracker.creature_at<Creature>( loc );
         if( creature ) {
             creature->set_reachable_zone( zone_number * zone_tick );
