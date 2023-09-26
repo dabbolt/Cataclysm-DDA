@@ -478,18 +478,23 @@ bool monster::mating_angry() const
 static void flood_fill_zone( Creature &origin )
 {
     static int zone_number = 1;
-    int zone_tick = to_turn<int>( calendar::turn ) & 1 ? 1 : -1;
+    static int zone_tick = 1;
+    map &here = get_map();
+    if( here.get_visitable_zones_cache_dirty() ) {
+        zone_tick = zone_tick > 0 ? -1 : 1;
+        here.set_visitable_zones_cache_dirty( false );
+        zone_number = 1;
+    }
     // This check insures we only flood fill when the target monster has an uninitialized zone,
     // or if it has a zone from last turn.  In other words it only triggers on
     // the first monster in a zone each turn. We can detect this because the sign
-    // of the zone numbers changes every turn.
+    // of the zone numbers changes on every invalidation.
     int old_zone = origin.get_reachable_zone();
     // Compare with zone_tick == old_zone && old_zone != 0
     if( ( zone_tick > 0 && old_zone > 0 ) ||
         ( zone_tick < 0 && old_zone < 0 ) ) {
         return;
     }
-    map &here = get_map();
     creature_tracker &tracker = get_creature_tracker();
 
     ff::flood_fill_visit_10_connected( origin.pos_bub(),
@@ -531,7 +536,7 @@ static void flood_fill_zone( Creature &origin )
         }
         return false;
     },
-    [&tracker, zone_tick]( const tripoint_bub_ms & loc ) {
+    [&tracker]( const tripoint_bub_ms & loc ) {
         Creature *creature = tracker.creature_at<Creature>( loc );
         if( creature ) {
             creature->set_reachable_zone( zone_number * zone_tick );
